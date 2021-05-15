@@ -29,15 +29,14 @@ class ViewController: UIViewController {
         }
     }
     
+    var player: AVPlayer! = nil
+    var playerItem : AVPlayerItem! = nil
+    
     override func viewDidLoad() {
         super.viewDidLoad()
         setUpView()
     }
     
-    override func viewWillAppear(_ animated: Bool) {
-        super.viewWillAppear(animated)
-        setUpView()
-    }
     
     func setUpView() {
         filterPicker.delegate = self
@@ -46,6 +45,7 @@ class ViewController: UIViewController {
     }
     
     func updateMediaView(_ dataMode: DataMode) {
+        cleanMediaView()
         switch dataMode {
         case .photo :
             cleanMediaView()
@@ -66,23 +66,31 @@ class ViewController: UIViewController {
         guard let image = UIImage(named: imageName) else {
             fatalError()
         }
-        imageView.image = applyFilter(image: image, filter: currentFilter)
+        imageView.image = applyFilterOnImage(image: image, filter: currentFilter)
         imageView.frame = mediaView.frame
         imageView.contentMode = .scaleAspectFill
         return imageView
     }
     
     func setUpVideoView(videoname: String, ofType: String) {
-        guard let path = Bundle.main.path(forResource: videoname, ofType: ofType) else {
-            fatalError()
-        }
-        let url = URL(fileURLWithPath: path)
-        let playerItem = AVPlayerItem(url: url)
-        let player = AVPlayer(playerItem: playerItem)
-        let playerLayer = AVPlayerLayer(player: player)
-        playerLayer.frame = mediaView.frame
-        playerLayer.videoGravity = .resizeAspectFill
-        mediaView.layer.addSublayer(playerLayer)
+
+        let path = Bundle.main.path(forResource: "video", ofType: "mp4")!
+        player = AVPlayer()
+        let pathURL = URL(fileURLWithPath: path)
+
+        playerItem = AVPlayerItem(url: pathURL)
+        player.replaceCurrentItem(with: playerItem)
+
+        let gpuMovie = GPUImageMovie(playerItem: playerItem)!
+        gpuMovie.playAtActualSpeed = true
+
+        let filteredView: GPUImageView = GPUImageView();
+        filteredView.frame = self.mediaView.frame
+        self.mediaView.addSubview(filteredView)
+
+        applyFilterOnVideo(gpuImageMovie: gpuMovie, onView: filteredView)
+
+        gpuMovie.startProcessing()
         player.play()
     }
     
@@ -93,36 +101,53 @@ class ViewController: UIViewController {
         mediaView.layer.sublayers?.forEach({ sub in
             sub.removeFromSuperlayer()
         })
+        if let player = player {
+            player.pause()
+        }
     }
     
-    func applyFilter(image: UIImage, filter: Filters) -> UIImage {
+    func applyFilterOnImage(image: UIImage, filter: Filters) -> UIImage {
         switch filter {
         case .threeCombo :
-            guard let filteredImage = GPUImagePicture(image: image) else {
-                fatalError()
-            }
-            
-            let f1 = GPUImageToonFilter()
-            let f2 = GPUImageSketchFilter()
-            let f3 = GPUImageMosaicFilter()
-            
-            filteredImage.addTarget(f1)
-            f1.addTarget(f2)
-            f2.addTarget(f3)
-            
-            f3.useNextFrameForImageCapture()
-            filteredImage.processImage()
-            
-            return filteredImage.imageFromCurrentFramebuffer()
+            var imageCopy = image
+                let picture = GPUImagePicture(image: image)
+                let filter1 = GPUImageContrastFilter()
+                filter1.contrast = 2.0
+                let filter2 = GPUImageSharpenFilter()
+                let filter3 = GPUImageBoxBlurFilter()
+                filter3.blurRadiusInPixels = 10
+                picture?.addTarget(filter1)
+                filter1.addTarget(filter2)
+                filter2.addTarget(filter3)
+                filter3.useNextFrameForImageCapture()
+                picture?.processImage()
+                imageCopy = filter3.imageFromCurrentFramebuffer(with: image.imageOrientation)
+                return imageCopy
             
         default :
             return image
         }
     }
     
+    func applyFilterOnVideo(gpuImageMovie: GPUImageMovie, onView: GPUImageView) {
+        switch currentFilter {
+        case .threeCombo :
+            let f1 = GPUImageBoxBlurFilter()
+            let f2 = GPUImageSepiaFilter()
+            let f3 = GPUImageEmbossFilter()
+            gpuImageMovie.addTarget(f1)
+            f1.addTarget(f2)
+            f2.addTarget(f3)
+            f3.addTarget(onView)
+            gpuImageMovie.startProcessing()
+        default :
+            gpuImageMovie.addTarget(onView)
+            gpuImageMovie.startProcessing()
+        }
+    }
+    
     @IBAction func contentSegmentChanged(_ sender: Any) {
-       currentDataMode = contentSegmentControll.selectedSegmentIndex == 0 ? .photo : .video
-        print(currentDataMode)
+        currentDataMode = contentSegmentControll.selectedSegmentIndex == 0 ? .photo : .video
     }
     
     enum DataMode {
@@ -155,7 +180,12 @@ extension ViewController: UIPickerViewDelegate, UIPickerViewDataSource {
     
     func pickerView(_ pickerView: UIPickerView, didSelectRow row: Int, inComponent component: Int) {
         currentFilter = filerArray[row].1
-        updateMediaView(currentDataMode)
+        switch currentDataMode {
+        case .photo :
+            updateMediaView(.photo)
+        case .video :
+            updateMediaView(.video)
+        }
     }
 }
 
