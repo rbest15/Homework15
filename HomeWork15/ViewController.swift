@@ -123,9 +123,51 @@ class ViewController: UIViewController {
                 picture?.processImage()
                 imageCopy = filter3.imageFromCurrentFramebuffer(with: image.imageOrientation)
                 return imageCopy
-            
-        default :
+        case .colorAdjustments :
+            var imageCopy = image
+                let picture = GPUImagePicture(image: image)
+                let filter1 = GPUImageSaturationFilter()
+            filter1.saturation = 3
+                picture?.addTarget(filter1)
+                filter1.useNextFrameForImageCapture()
+                picture?.processImage()
+                imageCopy = filter1.imageFromCurrentFramebuffer(with: image.imageOrientation)
+                return imageCopy
+        case .visualEffects :
+            var imageCopy = image
+                let picture = GPUImagePicture(image: image)
+                let filter1 = GPUImagePolkaDotFilter()
+            filter1.dotScaling = 0.8
+                picture?.addTarget(filter1)
+                filter1.useNextFrameForImageCapture()
+                picture?.processImage()
+                imageCopy = filter1.imageFromCurrentFramebuffer(with: image.imageOrientation)
+                return imageCopy
+        case .visualEffectsCombo :
+            var imageCopy = image
+                let picture = GPUImagePicture(image: image)
+                let filter1 = GPUImagePixellateFilter()
+                let filter2 = GPUImageToonFilter()
+                let filter3 =   GPUImagePosterizeFilter()
+                picture?.addTarget(filter1)
+                filter1.addTarget(filter2)
+                filter2.addTarget(filter3)
+                filter3.useNextFrameForImageCapture()
+                picture?.processImage()
+                imageCopy = filter3.imageFromCurrentFramebuffer(with: image.imageOrientation)
+                return imageCopy
+        case .none :
             return image
+        case .lookUpTable:
+            let picture  = GPUImagePicture(image: image)
+            let lut = GPUImagePicture(image: UIImage(named: "lut"))
+            let f = GPUImageLookupFilter()
+            lut?.addTarget(f, atTextureLocation: 1)
+            picture?.addTarget(f, atTextureLocation: 0)
+            f.useNextFrameForImageCapture()
+            lut?.processImage()
+            picture?.processImage()
+            return f.imageFromCurrentFramebuffer()
         }
     }
     
@@ -140,11 +182,55 @@ class ViewController: UIViewController {
             f2.addTarget(f3)
             f3.addTarget(onView)
             gpuImageMovie.startProcessing()
-        default :
+        case .colorAdjustments :
+            let f1 = GPUImageRGBFilter()
+            f1.blue = 20
+            gpuImageMovie.addTarget(f1)
+            f1.addTarget(onView)
+            gpuImageMovie.startProcessing()
+        case .visualEffectsCombo :
+            let f1 = GPUImageToonFilter()
+            let f2 = GPUImageStretchDistortionFilter()
+            let f3 = GPUImageVignetteFilter()
+            gpuImageMovie.addTarget(f1)
+            f1.addTarget(f2)
+            f2.addTarget(f3)
+            f3.addTarget(onView)
+            gpuImageMovie.startProcessing()
+        case .visualEffects :
+            let f1 = GPUImageKuwaharaFilter()
+            gpuImageMovie.addTarget(f1)
+            f1.addTarget(onView)
+            gpuImageMovie.startProcessing()
+        case .none :
             gpuImageMovie.addTarget(onView)
             gpuImageMovie.startProcessing()
+        case .lookUpTable :
+            let lut = GPUImagePicture(image: UIImage(named: "lut"))
+            let f = GPUImageLookupFilter()
+            lut?.addTarget(f, atTextureLocation: 1)
+            gpuImageMovie.addTarget(f, atTextureLocation: 0)
+            f.addTarget(onView)
+            lut?.processImage()
+            gpuImageMovie.startProcessing()
         }
+        
     }
+    
+//    func apply(object: GPUImageOutput, on: GPUImageView?, filters: [GPUImageFilter]) -> GPUImageOutput {
+//        var objectCopy = object as! GPUImagePicture
+//        for filter in filters {
+//            if filter == filters.first {
+//                objectCopy.addTarget(filter)
+//            } else if filter == filters.last {
+//                filter.useNextFrameForImageCapture()
+//            } else {
+//                filter.addTarget(filters[filters.firstIndex(of: filter)! + 1])
+//            }
+//        }
+//        objectCopy.processImage()
+//        return objectCopy
+//    }
     
     @IBAction func contentSegmentChanged(_ sender: Any) {
         currentDataMode = contentSegmentControll.selectedSegmentIndex == 0 ? .photo : .video
